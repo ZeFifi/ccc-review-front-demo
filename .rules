@@ -1,0 +1,8 @@
+Ce projet est une démo Next.js 16 (App Router, TypeScript).
+
+Avant de proposer un commit, lance `npm run typecheck`, `npm run lint` et `npm test`.
+
+Pour toute demande de relecture de diff ("relis mon diff", "review", "est-ce que je peux merger"),
+lis et suis à la lettre `.claude/skills/review-front/SKILL.md`, avec les niveaux de risque de `RISK.md`.
+
+Accessibilité : `<button>` et `<a href>` uniquement pour les éléments interactifs, un `<label>` par champ.

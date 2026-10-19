@@ -1,0 +1,37 @@
+{
+  "name": "ccc-review-front-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Projet de démo CodeCodeCoders : relire des diffs IA quand on est seul (RISK.md, CI, skill review-front).",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:a11y": "playwright test",
+    "risk": "node scripts/risk-level.mjs --base main",
+    "demo:diff-ia": "node demo/diff-ia.mjs"
+  },
+  "dependencies": {
+    "next": "^16.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "^16.4.0",
+    "eslint-plugin-jsx-a11y": "^6.10.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.0"
+  }
+}

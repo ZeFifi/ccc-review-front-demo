@@ -1,0 +1,123 @@
+# review-front.yml : la première lecture, faite par des machines qui n'inventent rien
+# À placer dans .github/workflows/ d'un projet Next.js.
+# Prérequis dans package.json : les scripts "typecheck", "lint" et "test" (voir l'article),
+# et Playwright installé si vous gardez le job a11y.
+
+# Versions : actions en Node 24 (checkout v5, setup-node v6, upload-artifact v6).
+# Runner épinglé sur ubuntu-24.04 : ubuntu-latest bascule vers Ubuntu 26.04 entre le 19 octobre
+# et le 19 novembre 2026. Passez à ubuntu-26.04 une fois que Playwright y est validé.
+
+name: review-front
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: review-front-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  risque:
+    name: Niveau de risque
+    runs-on: ubuntu-24.04
+    outputs:
+      level: ${{ steps.risk.outputs.level }}
+      too_big: ${{ steps.risk.outputs.too_big }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Classer le diff selon RISK.md
+        id: risk
+        run: node scripts/risk-level.mjs --base origin/${{ github.base_ref }}
+      - name: Étiqueter la PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          LEVEL: ${{ steps.risk.outputs.level }}
+          TOO_BIG: ${{ steps.risk.outputs.too_big }}
+        run: |
+          gh label create "risque:haut" --color B60205 --force >/dev/null
+          gh label create "risque:moyen" --color FBCA04 --force >/dev/null
+          gh label create "risque:bas" --color 0E8A16 --force >/dev/null
+          gh label create "diff-trop-gros" --color 5319E7 --force >/dev/null
+          gh pr edit "$PR" --remove-label "risque:haut,risque:moyen,risque:bas,diff-trop-gros" >/dev/null 2>&1 || true
+          gh pr edit "$PR" --add-label "risque:$LEVEL"
+          if [ "$TOO_BIG" = "true" ]; then gh pr edit "$PR" --add-label "diff-trop-gros"; fi
+
+  verifs:
+    name: Types, lint, tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npm run typecheck
+      - name: Lint (dont jsx-a11y en erreur)
+        run: npm run lint
+      - name: Tests unitaires
+        run: npm test --if-present
+
+  a11y:
+    name: Accessibilité (axe + Playwright)
+    runs-on: ubuntu-24.04
+    needs: verifs
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Audit axe sur les pages clés
+        run: npx playwright test e2e/a11y.spec.ts
+      - name: Garder le rapport en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rapport-playwright
+          path: playwright-report/
+          retention-days: 7
+
+  verdict:
+    name: Verdict
+    runs-on: ubuntu-24.04
+    needs: [risque, verifs, a11y]
+    if: always()
+    steps:
+      - name: Résumé pour le relecteur (vous)
+        env:
+          LEVEL: ${{ needs.risque.outputs.level }}
+          TOO_BIG: ${{ needs.risque.outputs.too_big }}
+          VERIFS: ${{ needs.verifs.result }}
+          A11Y: ${{ needs.a11y.result }}
+        run: |
+          {
+            echo "## Verdict review-front"
+            echo ""
+            echo "- niveau : **$LEVEL**"
+            echo "- types, lint, tests : $VERIFS"
+            echo "- accessibilité : $A11Y"
+            if [ "$TOO_BIG" = "true" ]; then echo "- diff trop gros : découpez avant de relire"; fi
+            echo ""
+            case "$LEVEL" in
+              bas) echo "CI verte : survol du diff, fusion possible." ;;
+              moyen) echo "Lisez le rapport de la skill review-front et les fichiers qu'elle signale." ;;
+              haut) echo "Relecture ligne à ligne et test manuel avant fusion." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$VERIFS" != "success" ] || [ "$A11Y" != "success" ]; then exit 1; fi
