@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
   }
 
+  console.log("contact reçu", body);
   const errors = validateContact(body);
   if (Object.keys(errors).length > 0) {
     return NextResponse.json({ errors }, { status: 422 });
